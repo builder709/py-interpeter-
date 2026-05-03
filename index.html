@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="py.term" />
+  <meta name="theme-color" content="#0b0c0e" />
+  <title>py.term — Python on iPhone</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Fraunces:opsz,wght@9..144,300;9..144,500;9..144,600&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
+  <style>
+    :root {
+      --bg: #0b0c0e;
+      --bg-elev: #14161a;
+      --bg-elev-2: #1a1d24;
+      --bg-input: #0f1115;
+      --border: #232730;
+      --border-soft: #1a1d24;
+      --text: #e7e9ee;
+      --text-dim: #8a92a3;
+      --text-faint: #4f5666;
+      --accent: #ffd84d;
+      --accent-2: #6aa6ff;
+      --ok: #6ee7b7;
+      --err: #ff7a83;
+      --keystroke: #1b1e25;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body {
+      margin: 0; padding: 0;
+      height: 100%; height: 100dvh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+      font-size: 14px;
+      overscroll-behavior: none;
+      -webkit-font-smoothing: antialiased;
+    }
+    body {
+      display: flex; flex-direction: column;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    }
+    button { font-family: inherit; }
+
+```
+header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 14px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.brand { display: flex; align-items: baseline; gap: 4px; flex: 0 0 auto; }
+.logo {
+  font-family: 'Fraunces', Georgia, serif;
+  font-weight: 500; font-size: 22px;
+  letter-spacing: -0.02em;
+}
+.logo .dot { color: var(--accent); }
+.logo .term {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 500; font-size: 13px;
+  color: var(--text-dim);
+  margin-left: 2px;
+}
+
+.file-pill {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 10px 6px 8px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+  max-width: fit-content;
+}
+.file-pill .pill-icon { color: var(--text-dim); font-size: 11px; }
+.file-pill .pill-name {
+  max-width: 180px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.file-pill.scratch .pill-name { color: var(--text-dim); font-style: italic; }
+.file-pill .caret { color: var(--text-faint); font-size: 10px; }
+.file-pill:active { background: var(--bg-elev-2); }
+
+.status {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 10px; color: var(--text-dim);
+  text-transform: uppercase; letter-spacing: 0.1em;
+  flex: 0 0 auto;
+}
+.pulse {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--text-faint);
+}
+.pulse.loading { background: var(--accent); animation: pulse 1.4s ease-in-out infinite; }
+.pulse.ready   { background: var(--ok); }
+.pulse.running { background: var(--accent-2); animation: pulse 0.7s ease-in-out infinite; }
+.pulse.error   { background: var(--err); }
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.45; transform: scale(1.4); }
+}
+
+main { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+
+.output-wrap {
+  flex: 1; min-height: 0;
+  overflow-y: auto;
+  padding: 14px 16px 16px;
+  -webkit-overflow-scrolling: touch;
+}
+.output {
+  white-space: pre-wrap; word-break: break-word;
+  font-size: 13px; line-height: 1.55;
+}
+.output > * { display: block; }
+.stdout { color: var(--text); }
+.stderr { color: var(--err); }
+.ret    { color: var(--accent-2); }
+.sys    { color: var(--text-dim); font-style: italic; }
+.echo   { color: var(--text-dim); margin: 2px 0; }
+.echo .prompt { color: var(--accent); user-select: none; }
+.output-sep {
+  height: 1px; background: var(--border-soft);
+  margin: 12px 0;
+}
+
+.editor-wrap {
+  border-top: 1px solid var(--border);
+  background: var(--bg-input);
+  display: flex; flex-direction: column;
+}
+.editor-row { display: flex; align-items: stretch; min-height: 110px; }
+.gutter {
+  width: 30px;
+  padding: 12px 4px 10px;
+  text-align: right;
+  color: var(--text-faint);
+  font-size: 11px; line-height: 1.55;
+  user-select: none;
+  border-right: 1px solid var(--border-soft);
+}
+.gutter span { display: block; }
+textarea.editor {
+  flex: 1; min-height: 110px; max-height: 38vh;
+  padding: 12px 14px 10px;
+  background: transparent; color: var(--text);
+  border: 0; outline: 0; resize: none;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 14px; line-height: 1.55;
+  caret-color: var(--accent);
+  -webkit-appearance: none;
+}
+textarea.editor::placeholder { color: var(--text-faint); }
+
+.toolbar {
+  display: flex; gap: 6px;
+  padding: 8px 10px;
+  overflow-x: auto;
+  border-top: 1px solid var(--border-soft);
+  background: var(--bg-elev);
+  scrollbar-width: none;
+}
+.toolbar::-webkit-scrollbar { display: none; }
+.key {
+  flex: 0 0 auto;
+  min-width: 38px; height: 34px;
+  padding: 0 10px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border);
+  background: var(--keystroke);
+  color: var(--text);
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer; user-select: none;
+  transition: transform 0.08s ease, background 0.15s ease;
+}
+.key:active { transform: scale(0.94); background: #262a33; }
+.key.accent { border-color: rgba(255,216,77,0.3); color: var(--accent); }
+
+.actions {
+  display: flex; gap: 8px;
+  padding: 10px 12px 14px;
+  border-top: 1px solid var(--border-soft);
+}
+.btn {
+  height: 46px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg-elev); color: var(--text);
+  font-size: 12px; letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: transform 0.08s ease, opacity 0.15s ease;
+}
+.btn:active { transform: scale(0.98); }
+.btn.primary {
+  background: var(--accent); color: #1a1500;
+  border-color: var(--accent);
+  font-weight: 700;
+  flex: 1;
+}
+.btn.primary:disabled {
+  background: var(--bg-elev); color: var(--text-faint);
+  border-color: var(--border); cursor: not-allowed;
+}
+.btn.ghost { padding: 0 14px; }
+
+/* ---- bottom sheet ---- */
+.sheet-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.55);
+  opacity: 0; pointer-events: none;
+  transition: opacity 0.25s ease;
+  z-index: 50;
+}
+.sheet-backdrop.open { opacity: 1; pointer-events: auto; }
+
+.sheet {
+  position: fixed; left: 0; right: 0; bottom: 0;
+  max-height: 82dvh;
+  background: var(--bg-elev);
+  border-top: 1px solid var(--border);
+  border-radius: 18px 18px 0 0;
+  transform: translateY(100%);
+  transition: transform 0.28s cubic-bezier(.2,.8,.2,1);
+  z-index: 51;
+  display: flex; flex-direction: column;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.sheet.open { transform: translateY(0); }
+.sheet-handle {
+  width: 36px; height: 4px;
+  background: var(--text-faint);
+  border-radius: 999px;
+  margin: 8px auto 4px;
+  opacity: 0.5;
+}
+.sheet-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 18px 8px;
+}
+.sheet-header h2 {
+  margin: 0;
+  font-family: 'Fraunces', Georgia, serif;
+  font-weight: 500;
+  font-size: 22px;
+  letter-spacing: -0.01em;
+}
+.sheet-close {
+  background: transparent; border: 0; color: var(--text-dim);
+  width: 36px; height: 36px;
+  font-size: 18px; cursor: pointer;
+  border-radius: 999px;
+}
+.sheet-close:active { background: var(--bg-elev-2); color: var(--text); }
+
+.sheet-actions {
+  display: flex; gap: 8px;
+  padding: 8px 14px 14px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.sheet-actions::-webkit-scrollbar { display: none; }
+.action-btn {
+  flex: 0 0 auto;
+  height: 38px;
+  padding: 0 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-elev-2);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
+  white-space: nowrap;
+}
+.action-btn:active { background: #20242c; }
+.action-btn.primary {
+  background: var(--accent); color: #1a1500;
+  border-color: var(--accent); font-weight: 600;
+}
+.action-btn .glyph { font-size: 14px; }
+
+.file-list {
+  flex: 1; min-height: 0;
+  overflow-y: auto;
+  padding: 4px 0 14px;
+  -webkit-overflow-scrolling: touch;
+}
+.file-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--border-soft);
+  cursor: pointer;
+  min-height: 56px;
+}
+.file-item:active { background: var(--bg-elev-2); }
+.file-item.active {
+  background: rgba(255,216,77,0.06);
+  border-left: 3px solid var(--accent);
+  padding-left: 15px;
+}
+.file-item .fname {
+  flex: 1; min-width: 0;
+  font-size: 13px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.file-item.scratch .fname {
+  font-style: italic; color: var(--text-dim);
+}
+.file-item .ftime {
+  font-size: 10px; color: var(--text-faint);
+  text-transform: uppercase; letter-spacing: 0.05em;
+  flex: 0 0 auto;
+}
+.file-item .ficon {
+  color: var(--text-faint); font-size: 13px;
+  width: 18px; text-align: center;
+  flex: 0 0 auto;
+}
+.file-item.active .ficon { color: var(--accent); }
+.file-item.scratch .ficon { color: var(--text-faint); }
+.trash {
+  flex: 0 0 auto;
+  width: 36px; height: 36px;
+  border: 0; background: transparent;
+  color: var(--text-faint);
+  font-size: 14px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.trash:active { background: var(--bg-elev-2); color: var(--err); }
+
+.empty-hint {
+  padding: 20px 18px;
+  color: var(--text-faint);
+  font-size: 12px;
+  font-style: italic;
+  text-align: center;
+}
+
+@media (min-width: 720px) {
+  header { padding: 16px 24px 14px; }
+  .output-wrap { padding: 18px 24px; }
+  .actions { padding: 14px 24px 18px; }
+  .output { font-size: 14px; }
+  textarea.editor { font-size: 15px; }
+  .sheet { max-width: 600px; left: 50%; transform: translate(-50%, 100%); border-radius: 18px; bottom: 20px; }
+  .sheet.open { transform: translate(-50%, 0); }
+}
+```
+
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <span class="logo">py<span class="dot">.</span><span class="term">term</span></span>
+    </div>
+    <button class="file-pill scratch" id="filePill" aria-label="open files">
+      <span class="pill-icon">▢</span>
+      <span class="pill-name" id="pillName">Scratch</span>
+      <span class="caret">▾</span>
+    </button>
+    <div class="status">
+      <span class="pulse loading" id="pulse"></span>
+      <span id="status-text">Booting</span>
+    </div>
+  </header>
+
+  <main>
+    <div class="output-wrap" id="outputWrap">
+      <div class="output" id="output"></div>
+    </div>
+
+```
+<div class="editor-wrap">
+  <div class="editor-row">
+    <div class="gutter" id="gutter"><span>1</span></div>
+    <textarea
+      class="editor" id="editor"
+      spellcheck="false" autocorrect="off"
+      autocapitalize="off" autocomplete="off"
+      placeholder="# write Python here&#10;print('hello, iPhone')"
+      rows="5"></textarea>
+  </div>
+
+  <div class="toolbar" id="toolbar"></div>
+
+  <div class="actions">
+    <button class="btn ghost" id="clearBtn">Clear</button>
+    <button class="btn primary" id="runBtn" disabled>Run ▶</button>
+  </div>
+</div>
+```
+
+  </main>
+
+  <!-- Files bottom sheet -->
+
+  <div class="sheet-backdrop" id="sheetBackdrop"></div>
+  <div class="sheet" id="filesSheet" aria-hidden="true">
+    <div class="sheet-handle"></div>
+    <div class="sheet-header">
+      <h2>Files</h2>
+      <button class="sheet-close" id="sheetClose" aria-label="close">✕</button>
+    </div>
+    <div class="sheet-actions">
+      <button class="action-btn primary" id="saveAsBtn"><span class="glyph">＋</span> Save as…</button>
+      <button class="action-btn" id="downloadBtn"><span class="glyph">⬇</span> Download .py</button>
+      <button class="action-btn" id="importBtn"><span class="glyph">⬆</span> Import .py</button>
+    </div>
+    <input type="file" id="fileInput" accept=".py,.txt,text/*" hidden />
+    <div class="file-list" id="fileList"></div>
+  </div>
+
+  <script>
+    // ---------- elements ----------
+    const editor = document.getElementById('editor');
+    const gutter = document.getElementById('gutter');
+    const output = document.getElementById('output');
+    const outputWrap = document.getElementById('outputWrap');
+    const runBtn = document.getElementById('runBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const pulse = document.getElementById('pulse');
+    const statusText = document.getElementById('status-text');
+    const toolbar = document.getElementById('toolbar');
+    const filePill = document.getElementById('filePill');
+    const pillName = document.getElementById('pillName');
+    const sheet = document.getElementById('filesSheet');
+    const sheetBackdrop = document.getElementById('sheetBackdrop');
+    const sheetClose = document.getElementById('sheetClose');
+    const fileList = document.getElementById('fileList');
+    const saveAsBtn = document.getElementById('saveAsBtn');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const importBtn = document.getElementById('importBtn');
+    const fileInput = document.getElementById('fileInput');
+
+    // ---------- toolbar (the symbols iOS makes painful to reach) ----------
+    const keys = [
+      { label: '⇥', insert: '    ', accent: true, title: 'tab — 4 spaces' },
+      { label: ':', insert: ':' },
+      { label: '=', insert: '=' },
+      { label: '(', insert: '()', cursor: -1 },
+      { label: '[', insert: '[]', cursor: -1 },
+      { label: '{', insert: '{}', cursor: -1 },
+      { label: "'", insert: "''", cursor: -1 },
+      { label: '"', insert: '""', cursor: -1 },
+      { label: '_', insert: '_' },
+      { label: '#', insert: '# ' },
+      { label: '.', insert: '.' },
+      { label: ',', insert: ', ' },
+      { label: '+', insert: '+' },
+      { label: '-', insert: '-' },
+      { label: '*', insert: '*' },
+      { label: '/', insert: '/' },
+      { label: '%', insert: '%' },
+      { label: '<', insert: '<' },
+      { label: '>', insert: '>' },
+      { label: '|', insert: '|' },
+      { label: '&', insert: '&' },
+    ];
+    keys.forEach(k => {
+      const b = document.createElement('button');
+      b.className = 'key' + (k.accent ? ' accent' : '');
+      b.textContent = k.label;
+      if (k.title) b.title = k.title;
+      b.addEventListener('mousedown', e => e.preventDefault());
+      b.addEventListener('touchstart', e => e.preventDefault(), { passive: false });
+      b.addEventListener('click', () => insertAtCursor(k.insert, k.cursor || 0));
+      toolbar.appendChild(b);
+    });
+
+    function insertAtCursor(text, cursorOffset = 0) {
+      editor.focus();
+      const start = editor.selectionStart, end = editor.selectionEnd;
+      editor.value = editor.value.slice(0, start) + text + editor.value.slice(end);
+      const pos = start + text.length + cursorOffset;
+      editor.selectionStart = editor.selectionEnd = pos;
+      onEditorChange();
+    }
+
+    // ---------- gutter ----------
+    function updateGutter() {
+      const lines = Math.max(1, editor.value.split('\n').length);
+      let html = '';
+      for (let i = 1; i <= lines; i++) html += `<span>${i}</span>`;
+      gutter.innerHTML = html;
+    }
+    editor.addEventListener('input', onEditorChange);
+    editor.addEventListener('scroll', () => { gutter.scrollTop = editor.scrollTop; });
+    function onEditorChange() {
+      updateGutter();
+      writeBufferContent(editor.value);
+    }
+
+    // auto-indent on Enter, paired-bracket awareness
+    editor.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey) {
+        const start = editor.selectionStart;
+        const before = editor.value.slice(0, start);
+        const lineStart = before.lastIndexOf('\n') + 1;
+        const currentLine = before.slice(lineStart);
+        const indentMatch = currentLine.match(/^(\s*)/);
+        let indent = indentMatch ? indentMatch[1] : '';
+        if (currentLine.trim().endsWith(':')) indent += '    ';
+        if (indent) { e.preventDefault(); insertAtCursor('\n' + indent, 0); }
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        e.preventDefault(); runCode();
+      }
+    });
+
+    // ---------- file state ----------
+    const KEY_FILES   = 'pyterm.files.v2';
+    const KEY_SCRATCH = 'pyterm.scratch.v2';
+    const KEY_CURRENT = 'pyterm.current.v2';
+    const KEY_LEGACY  = 'pyterm.code.v1';
+    const SCRATCH_NAME = '__scratch__';
+    const DEFAULT_SCRATCH =
+      "# Welcome to py.term — real CPython 3.12 in Safari.\n" +
+      "# Tap the file pill in the top bar to save, download, or import.\n" +
+      "# Saved files can import each other — they live in /home/pyodide/.\n" +
+      "# e.g. save 'helpers.py' with `def double(x): return x*2`,\n" +
+      "# then here:  from helpers import double; print(double(21))\n\n" +
+      "for i in range(5):\n    print(i, i*i)\n";
+
+    let files = {};       // { name: { content, modified } }
+    let scratch = '';
+    let currentFile = SCRATCH_NAME; // SCRATCH_NAME or a key in files
+
+    function loadState() {
+      // migrate v1 -> v2 scratch
+      try {
+        const legacy = localStorage.getItem(KEY_LEGACY);
+        if (legacy && !localStorage.getItem(KEY_SCRATCH)) {
+          localStorage.setItem(KEY_SCRATCH, legacy);
+        }
+      } catch {}
+      try { files = JSON.parse(localStorage.getItem(KEY_FILES) || '{}'); }
+      catch { files = {}; }
+      const scratchStored = localStorage.getItem(KEY_SCRATCH);
+      scratch = (scratchStored != null && scratchStored.length) ? scratchStored : DEFAULT_SCRATCH;
+      const cur = localStorage.getItem(KEY_CURRENT);
+      currentFile = (cur && cur !== SCRATCH_NAME && files[cur]) ? cur : SCRATCH_NAME;
+    }
+
+    function persist() {
+      try {
+        localStorage.setItem(KEY_FILES, JSON.stringify(files));
+        localStorage.setItem(KEY_SCRATCH, scratch);
+        localStorage.setItem(KEY_CURRENT, currentFile);
+      } catch (e) { console.warn('localStorage error', e); }
+    }
+
+    function bufferContent() {
+      return currentFile === SCRATCH_NAME ? scratch : (files[currentFile]?.content ?? '');
+    }
+    function writeBufferContent(content) {
+      if (currentFile === SCRATCH_NAME) {
+        scratch = content;
+      } else {
+        files[currentFile] = { content, modified: Date.now() };
+      }
+      persist();
+    }
+    function loadFileIntoEditor(name) {
+      currentFile = name;
+      editor.value = bufferContent();
+      updateGutter();
+      updatePill();
+      persist();
+    }
+    function updatePill() {
+      if (currentFile === SCRATCH_NAME) {
+        pillName.textContent = 'Scratch';
+        filePill.classList.add('scratch');
+      } else {
+        pillName.textContent = currentFile;
+        filePill.classList.remove('scratch');
+      }
+    }
+
+    // ---------- file actions ----------
+    function ensurePyExt(name) {
+      const trimmed = name.trim();
+      if (!trimmed) return '';
+      return /\.[a-z0-9]+$/i.test(trimmed) ? trimmed : trimmed + '.py';
+    }
+
+    function saveAs() {
+      let name = window.prompt('Save as (filename):', currentFile === SCRATCH_NAME ? 'untitled.py' : currentFile);
+      if (!name) return;
+      name = ensurePyExt(name);
+      if (!name) return;
+      if (files[name]) {
+        if (!window.confirm(`"${name}" already exists. Overwrite?`)) return;
+      }
+      files[name] = { content: editor.value, modified: Date.now() };
+      currentFile = name;
+      persist();
+      updatePill();
+      renderFileList();
+    }
+
+    function deleteFile(name) {
+      if (!files[name]) return;
+      if (!window.confirm(`Delete "${name}"? This can't be undone.`)) return;
+      delete files[name];
+      unlinkFromFS(name);
+      if (currentFile === name) {
+        currentFile = SCRATCH_NAME;
+        editor.value = scratch;
+        updateGutter();
+        updatePill();
+      }
+      persist();
+      renderFileList();
+    }
+
+    function downloadCurrent() {
+      const name = currentFile === SCRATCH_NAME
+        ? 'scratch.py'
+        : ensurePyExt(currentFile);
+      const blob = new Blob([editor.value], { type: 'text/x-python;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+    }
+
+    function importFile() { fileInput.click(); }
+    fileInput.addEventListener('change', (e) => {
+      const f = e.target.files && e.target.files[0];
+      if (!f) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        let name = f.name || 'imported.py';
+        const baseName = name;
+        let n = 2;
+        while (files[name]) {
+          name = baseName.replace(/(\.[^.]+)?$/, ` (${n})$1`);
+          n++;
+        }
+        files[name] = { content: String(reader.result || ''), modified: Date.now() };
+        currentFile = name;
+        editor.value = files[name].content;
+        updateGutter();
+        updatePill();
+        persist();
+        renderFileList();
+      };
+      reader.readAsText(f);
+      fileInput.value = '';
+    });
+
+    // ---------- file list rendering ----------
+    function fmtTime(ms) {
+      if (!ms) return '';
+      const d = new Date(ms);
+      const now = new Date();
+      const sameDay = d.toDateString() === now.toDateString();
+      if (sameDay) return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      const yr = d.getFullYear() === now.getFullYear() ? '' : ` ${d.getFullYear()}`;
+      return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) + yr;
+    }
+
+    function renderFileList() {
+      fileList.innerHTML = '';
+
+      // Scratch row (always present)
+      const scratchRow = document.createElement('div');
+      scratchRow.className = 'file-item scratch' + (currentFile === SCRATCH_NAME ? ' active' : '');
+      const sIcon = document.createElement('span'); sIcon.className = 'ficon'; sIcon.textContent = '✦';
+      const sName = document.createElement('span'); sName.className = 'fname'; sName.textContent = 'Scratch';
+      const sTime = document.createElement('span'); sTime.className = 'ftime'; sTime.textContent = 'always';
+      scratchRow.append(sIcon, sName, sTime);
+      scratchRow.addEventListener('click', () => { loadFileIntoEditor(SCRATCH_NAME); closeSheet(); });
+      fileList.appendChild(scratchRow);
+
+      const names = Object.keys(files).sort((a, b) =>
+        (files[b].modified || 0) - (files[a].modified || 0)
+      );
+
+      if (names.length === 0) {
+        const hint = document.createElement('div');
+        hint.className = 'empty-hint';
+        hint.textContent = 'No saved files yet. Tap "Save as…" to create one.';
+        fileList.appendChild(hint);
+        return;
+      }
+
+      names.forEach(name => {
+        const row = document.createElement('div');
+        row.className = 'file-item' + (currentFile === name ? ' active' : '');
+        const f = files[name];
+
+        const icon = document.createElement('span');
+        icon.className = 'ficon'; icon.textContent = '▤';
+
+        const fname = document.createElement('span');
+        fname.className = 'fname'; fname.textContent = name;
+
+        const time = document.createElement('span');
+        time.className = 'ftime'; time.textContent = fmtTime(f.modified);
+
+        const trash = document.createElement('button');
+        trash.className = 'trash';
+        trash.setAttribute('aria-label', 'delete ' + name);
+        trash.textContent = '🗑';
+        trash.addEventListener('click', (e) => { e.stopPropagation(); deleteFile(name); });
+
+        row.append(icon, fname, time, trash);
+        row.addEventListener('click', () => { loadFileIntoEditor(name); closeSheet(); });
+        fileList.appendChild(row);
+      });
+    }
+
+    // ---------- sheet open/close ----------
+    function openSheet() {
+      renderFileList();
+      sheet.classList.add('open');
+      sheetBackdrop.classList.add('open');
+      sheet.setAttribute('aria-hidden', 'false');
+    }
+    function closeSheet() {
+      sheet.classList.remove('open');
+      sheetBackdrop.classList.remove('open');
+      sheet.setAttribute('aria-hidden', 'true');
+    }
+    filePill.addEventListener('click', openSheet);
+    sheetClose.addEventListener('click', closeSheet);
+    sheetBackdrop.addEventListener('click', closeSheet);
+    saveAsBtn.addEventListener('click', saveAs);
+    downloadBtn.addEventListener('click', downloadCurrent);
+    importBtn.addEventListener('click', importFile);
+
+    // ---------- multi-file project support ----------
+    // All saved files are mirrored to /home/pyodide/ in Pyodide's virtual FS
+    // before each run, so they can `import` each other.
+    const PROJECT_DIR = '/home/pyodide';
+    let lastSyncedNames = new Set();
+
+    async function setupUserPath() {
+      if (!pyodide) return;
+      await pyodide.runPythonAsync(`
+import sys
+if '${PROJECT_DIR}' not in sys.path:
+    sys.path.insert(0, '${PROJECT_DIR}')
+      `);
+    }
+
+    async function syncFilesToFS() {
+      if (!pyodide) return;
+      const wanted = new Set(Object.keys(files));
+      // Remove files we previously synced but no longer have
+      for (const name of lastSyncedNames) {
+        if (!wanted.has(name)) {
+          try { pyodide.FS.unlink(`${PROJECT_DIR}/${name}`); } catch {}
+        }
+      }
+      // Write current files
+      for (const [name, file] of Object.entries(files)) {
+        try {
+          pyodide.FS.writeFile(`${PROJECT_DIR}/${name}`, file.content);
+        } catch (e) {
+          console.warn('FS write failed for', name, e);
+        }
+      }
+      lastSyncedNames = wanted;
+      // Clear cached user modules so re-edits take effect on re-import
+      await pyodide.runPythonAsync(`
+import sys
+__pd = '${PROJECT_DIR}/'
+__clear = [n for n, m in list(sys.modules.items())
+           if getattr(m, '__file__', None)
+           and isinstance(m.__file__, str)
+           and m.__file__.startswith(__pd)]
+for __n in __clear:
+    del sys.modules[__n]
+del __clear, __pd
+      `);
+    }
+
+    function unlinkFromFS(name) {
+      if (!pyodide) return;
+      try { pyodide.FS.unlink(`${PROJECT_DIR}/${name}`); } catch {}
+      lastSyncedNames.delete(name);
+    }
+
+    // ---------- output ----------
+    function appendBlock(node) {
+      output.appendChild(node);
+      outputWrap.scrollTop = outputWrap.scrollHeight;
+    }
+    function appendText(text, kind = 'stdout') {
+      if (!text) return;
+      const span = document.createElement('span');
+      span.className = kind;
+      span.textContent = text;
+      appendBlock(span);
+    }
+    function appendEcho(code) {
+      if (output.children.length > 0) {
+        const sep = document.createElement('div');
+        sep.className = 'output-sep';
+        appendBlock(sep);
+      }
+      const wrap = document.createElement('div');
+      wrap.className = 'echo';
+      code.split('\n').forEach((line, i) => {
+        const row = document.createElement('div');
+        const p = document.createElement('span');
+        p.className = 'prompt';
+        p.textContent = i === 0 ? '>>> ' : '... ';
+        row.appendChild(p);
+        row.appendChild(document.createTextNode(line));
+        wrap.appendChild(row);
+      });
+      appendBlock(wrap);
+    }
+
+    function setStatus(state, text) {
+      pulse.className = 'pulse ' + state;
+      statusText.textContent = text;
+      // Reflect state on the Run button label so it doesn't look broken while booting
+      if (state === 'loading') {
+        runBtn.textContent = 'Loading…';
+        runBtn.disabled = true;
+      } else if (state === 'running') {
+        runBtn.textContent = 'Running…';
+        runBtn.disabled = true;
+      } else {
+        runBtn.textContent = 'Run ▶';
+        runBtn.disabled = !pyodide;
+      }
+    }
+
+    // ---------- pyodide ----------
+    let pyodide = null;
+    async function bootPyodide() {
+      setStatus('loading', 'Booting');
+      appendText('Loading Python interpreter — first launch downloads ~10 MB of WebAssembly.\nThis can take 30–60 seconds on a phone. The Run button activates when ready.\n', 'sys');
+      try {
+        const loadPromise = loadPyodide({ indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.26.4/full/' });
+        const timeout = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Boot timed out after 90 seconds. Check your network, or the data: URL origin may be blocking cross-origin WASM. Try the .html file or a hosted version.')), 90000)
+        );
+        pyodide = await Promise.race([loadPromise, timeout]);
+        pyodide.setStdout({ batched: (s) => appendText(s + '\n', 'stdout') });
+        pyodide.setStderr({ batched: (s) => appendText(s + '\n', 'stderr') });
+        pyodide.setStdin({ stdin: () => (window.prompt('input():') ?? '') + '\n' });
+        const ver = pyodide.runPython('import sys; sys.version.split()[0]');
+        await setupUserPath();
+        appendText(`Python ${ver} ready. Saved files live in ${PROJECT_DIR}/ and can import each other.\nTop-level await works. Install pure-Python packages with:\n  import micropip; await micropip.install('package')\n`, 'sys');
+        setStatus('ready', 'Ready');
+      } catch (err) {
+        setStatus('error', 'Failed');
+        appendText('Failed to load Python: ' + (err && err.message ? err.message : err) + '\n', 'stderr');
+      }
+    }
+
+    function formatResult(result) {
+      if (result === undefined || result === null) return null;
+      if (typeof result === 'boolean') return result ? 'True' : 'False';
+      if (typeof result === 'number' || typeof result === 'bigint') return String(result);
+      if (typeof result === 'string') {
+        const safe = result.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n').replace(/\t/g, '\\t').replace(/\r/g, '\\r');
+        return "'" + safe + "'";
+      }
+      try {
+        const repr = pyodide.globals.get('repr');
+        const s = repr(result);
+        repr.destroy();
+        return s;
+      } catch { return String(result); }
+    }
+
+    async function runCode() {
+      if (!pyodide) return;
+      const code = editor.value;
+      if (!code.trim()) return;
+      runBtn.disabled = true;
+      setStatus('running', 'Running');
+      appendEcho(code);
+      let result;
+      try {
+        await syncFilesToFS();
+        result = await pyodide.runPythonAsync(code);
+        const display = formatResult(result);
+        if (display !== null) appendText(display + '\n', 'ret');
+        setStatus('ready', 'Ready');
+      } catch (err) {
+        appendText(String(err && err.message ? err.message : err) + '\n', 'stderr');
+        setStatus('error', 'Error');
+      } finally {
+        if (result && typeof result === 'object' && typeof result.destroy === 'function') {
+          try { result.destroy(); } catch {}
+        }
+        runBtn.disabled = false;
+      }
+    }
+
+    runBtn.addEventListener('click', runCode);
+    clearBtn.addEventListener('click', () => {
+      output.innerHTML = '';
+      if (pyodide) setStatus('ready', 'Ready');
+    });
+
+    // ---------- boot ----------
+    loadState();
+    editor.value = bufferContent();
+    updateGutter();
+    updatePill();
+    bootPyodide();
+  </script>
+
+</body>
+</html>
